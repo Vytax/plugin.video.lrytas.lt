@@ -18,7 +18,7 @@ import gzip
 reload(sys) 
 sys.setdefaultencoding('utf8')
 
-settings = xbmcaddon.Addon(id='plugin.video.lrytastv')
+settings = xbmcaddon.Addon(id='plugin.video.lrytas.lt')
 
 LRYTAS_URL = 'http://tv.lrytas.lt'
 LRYTAS_LATEST_VIDEOS = LRYTAS_URL + '/api/?what=new&sid=1%2C2&kiek=50&page='
