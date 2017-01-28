@@ -22,15 +22,43 @@ settings = xbmcaddon.Addon(id='plugin.video.lrytas.lt')
 
 LRYTAS_URL = 'http://tv.lrytas.lt'
 LRYTAS_API_URL = 'http://tv2.lrytas.lt/api/?'
-LRYTAS_LATEST_VIDEOS = LRYTAS_API_URL + 'what=new&sid=1%2C2&kiek=50&page='
-LRYTAS_POPULAR_VIDEOS = LRYTAS_API_URL + 'what=pop&tema=0&d=7&sid=1&kiek=45&page='
-LRYTAS_NEWS_VIDEOS = LRYTAS_API_URL + 'what=new&sid=1&kiek=50&page='
+LRYTAS_API2_URL = 'http://kolumbus-api.lrytas.lt/query/?count=20&type=Video&'
+LRYTAS_LATEST_VIDEOS = LRYTAS_API2_URL +'order=props.pubfromdate_local-&ret_fields=props.categories[0].name__AS__category,props.href__AS__href,props.title__AS__title,props.media[1].otheralternate.ssurl.href__AS__ssurl,props.contributors[0].name__AS__contributors,props.kpm3id__AS__kpm3id,props.summary__AS__summary,props.media[indexof(x.type=%27media%27%20for%20x%20in%20props.media)].otheralternate.1280x720.href__AS__thumb,props.pubfromdate__AS__date&page='
+LRYTAS_POPULAR_VIDEOS = LRYTAS_API2_URL + 'order=read_count-&ret_fields=props.categories[0].name__AS__category,props.href__AS__href,props.title__AS__title,props.media[1].otheralternate.ssurl.href__AS__ssurl,props.contributors[0].name__AS__contributors,props.kpm3id__AS__kpm3id,props.summary__AS__summary,props.media[indexof(x.type=%27media%27%20for%20x%20in%20props.media)].otheralternate.1280x720.href__AS__thumb,props.pubfromdate__AS__date&page='
+LRYTAS_NEWS_VIDEOS = LRYTAS_API2_URL + 'order=props.pubfromdate_local-&ret_fields=props.categories[0].name__AS__category,props.href__AS__href,props.title__AS__title,props.media[1].otheralternate.ssurl.href__AS__ssurl,props.contributors[0].name__AS__contributors,props.kpm3id__AS__kpm3id,props.summary__AS__summary,props.media[indexof(x.type=%27media%27%20for%20x%20in%20props.media)].otheralternate.1280x720.href__AS__thumb,props.pubfromdate__AS__date&categoryterm=%2Flrytas%2Fvideo%2Fzinios*&page='
 LRYTAS_VIDEOTEKA_VIDEOS = LRYTAS_API_URL + 'what=new&page=%d&sid=3&tema=%s&kiek=45'
 LRYTAS_SEARCH = LRYTAS_API_URL + 'q=%s&what=search&page=%d&kiek=45'
 LRYTAS_VIDEOTEKA = LRYTAS_URL + '/archyvas/'
 LRYTAS_LIVE = 'http://ssb.lrytas.lt/live/smil:lrytas.smil/playlist.m3u8'
 LRYTAS_EPG = LRYTAS_API_URL + 'what=tvprog'
 LRYTAS_IMG = 'http://img.lrytas.lt/show_foto/?id=%s&s=6&f=5'
+
+from HTMLParser import HTMLParser
+import htmlentitydefs
+
+class HTMLTextExtractor(HTMLParser):
+  def __init__(self):
+    HTMLParser.__init__(self)
+    self.result = [ ]
+
+  def handle_data(self, d):
+    self.result.append(d)
+
+  def handle_charref(self, number):
+    codepoint = int(number[1:], 16) if number[0] in (u'x', u'X') else int(number)
+    self.result.append(unichr(codepoint))
+
+  def handle_entityref(self, name):
+    codepoint = htmlentitydefs.name2codepoint[name]
+    self.result.append(unichr(codepoint))
+
+  def get_text(self):
+    return u''.join(self.result)
+
+def html_to_text(html):
+    s = HTMLTextExtractor()
+    s.feed(html)
+    return s.get_text()
 
 def getParameters(parameterString):
   commands = {}
@@ -95,6 +123,40 @@ def news_videos(page=1):
   loadData(LRYTAS_NEWS_VIDEOS + str(page))
 
 def loadData(url, m_url=None):
+  
+  html = getURL(url)
+  js = json.loads(html)
+  
+  if 'result' not in js:
+    return
+  
+  for video in js['result']:
+    listitem = xbmcgui.ListItem(video['title'])
+    listitem.setProperty('IsPlayable', 'true')
+    listitem.setThumbnailImage(video['thumb'])
+    
+    info = { 'title': video['title'], 'plot': html_to_text(video['summary']), 'aired' : video['date'], 'genre' : video['category']}
+    
+    listitem.setInfo(type = 'video', infoLabels = info )
+    
+    xbmcplugin.addDirectoryItem(handle = int(sys.argv[1]), url = video['ssurl'], listitem = listitem, isFolder = False, totalItems = 0)
+    
+  if len(js['result']) >= 20:
+    listitem = xbmcgui.ListItem("[Daugiau... ] %d" % page)
+    listitem.setProperty('IsPlayable', 'false')
+      
+    u = {}
+    u['mode'] = mode
+    u['page'] = page + 1
+    if m_url:
+      u['url'] = m_url
+    xbmcplugin.addDirectoryItem(handle = int(sys.argv[1]), url = sys.argv[0] + '?' + urllib.urlencode(u), listitem = listitem, isFolder = True, totalItems = 0)
+  
+  xbmcplugin.setContent(int( sys.argv[1] ), 'tvshows')
+  xbmc.executebuiltin('Container.SetViewMode(503)')
+  xbmcplugin.endOfDirectory(int(sys.argv[1]))
+
+def loadData2(url, m_url=None):
   
   html = getURL(url)
   js = json.loads(html)
