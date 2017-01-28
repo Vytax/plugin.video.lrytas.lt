@@ -21,13 +21,15 @@ sys.setdefaultencoding('utf8')
 settings = xbmcaddon.Addon(id='plugin.video.lrytas.lt')
 
 LRYTAS_URL = 'http://tv.lrytas.lt'
-LRYTAS_LATEST_VIDEOS = LRYTAS_URL + '/api/?what=new&sid=1%2C2&kiek=50&page='
-LRYTAS_POPULAR_VIDEOS = LRYTAS_URL + '/api/?what=pop&tema=0&d=7&sid=1&kiek=45&page='
-LRYTAS_NEWS_VIDEOS = LRYTAS_URL + '/api/?what=new&sid=1&kiek=50&page='
-LRYTAS_VIDEOTEKA_VIDEOS = LRYTAS_URL + '/api/?what=new&page=%d&sid=3&tema=%s&kiek=45'
-LRYTAS_SEARCH = LRYTAS_URL + '/api/?q=%s&what=search&page=%d&kiek=45'
+LRYTAS_API_URL = 'http://tv2.lrytas.lt/api/?'
+LRYTAS_LATEST_VIDEOS = LRYTAS_API_URL + 'what=new&sid=1%2C2&kiek=50&page='
+LRYTAS_POPULAR_VIDEOS = LRYTAS_API_URL + 'what=pop&tema=0&d=7&sid=1&kiek=45&page='
+LRYTAS_NEWS_VIDEOS = LRYTAS_API_URL + 'what=new&sid=1&kiek=50&page='
+LRYTAS_VIDEOTEKA_VIDEOS = LRYTAS_API_URL + 'what=new&page=%d&sid=3&tema=%s&kiek=45'
+LRYTAS_SEARCH = LRYTAS_API_URL + 'q=%s&what=search&page=%d&kiek=45'
 LRYTAS_VIDEOTEKA = LRYTAS_URL + '/archyvas/'
-LRYTAS_LIVE = LRYTAS_URL + '/live/'
+LRYTAS_LIVE = 'http://ssb.lrytas.lt/live/smil:lrytas.smil/playlist.m3u8'
+LRYTAS_EPG = LRYTAS_API_URL + 'what=tvprog'
 LRYTAS_IMG = 'http://img.lrytas.lt/show_foto/?id=%s&s=6&f=5'
 
 def getParameters(parameterString):
@@ -125,37 +127,35 @@ def loadData(url, m_url=None):
   xbmcplugin.setContent(int( sys.argv[1] ), 'tvshows')
   xbmc.executebuiltin('Container.SetViewMode(503)')
   xbmcplugin.endOfDirectory(int(sys.argv[1]))
+
+def liveError():
+  dialog = xbmcgui.Dialog()
+  ok = dialog.ok( "Lietuvo ryto TV" , 'Nepavyko paleisti vaizdo įrašo!' ) 
   
+
 def live():
   
-  html = getURL(LRYTAS_LIVE)
+  html = getURL(LRYTAS_EPG)
   
-  url = None
-  thumb = None
-  title = None
+  js = json.loads(html)
   
-  parts = re.findall('<video id="content_video"[^<>]*poster="([^"]*)"[^<>]*><source src="([^"]*)"', html, re.DOTALL)
-  
-  if parts:
-    thumb = parts[0][0]
-    url = parts[0][1]
-    
-  parts = re.findall('<div class=\'desc\'><h1>([^<]*)<\/h1>', html, re.DOTALL)
-  if parts:
-    title = parts[0]
-  
-  if not url:
-    dialog = xbmcgui.Dialog()
-    ok = dialog.ok( "Lietuvo ryto TV" , 'Nepavyko paleisti vaizdo įrašo!' )
+  if 's' not in js:
+    liveError()
     return
   
-  if not title:
-    title = "Lietuvo ryto TV"
+  data = js['s'][0]
   
-  listitem = xbmcgui.ListItem(label = title)
-  listitem.setPath(url)
-  if thumb:
-    listitem.setThumbnailImage(thumb)
+  if not data:
+    liveError()
+    return
+  
+  listitem = xbmcgui.ListItem(data['PAVADINIMAS'])
+  listitem.setPath(LRYTAS_LIVE)
+  listitem.setThumbnailImage(LRYTAS_IMG % data['FOTO_ID'])
+  
+  info = { 'title': data['PAVADINIMAS'], 'plot': data['TEKSTAS'], 'aired' : data['DAT'], 'genre' : data['SKILTIS_PAV']}
+  listitem.setInfo(type = 'video', infoLabels = info )
+  
   xbmcplugin.setResolvedUrl(handle = int(sys.argv[1]), succeeded = True, listitem = listitem)
   
 
