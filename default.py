@@ -10,7 +10,6 @@ import sys
 import urllib
 import urllib2
 import simplejson as json
-import re
 
 from StringIO import StringIO
 import gzip
@@ -21,16 +20,13 @@ sys.setdefaultencoding('utf8')
 settings = xbmcaddon.Addon(id='plugin.video.lrytas.lt')
 
 LRYTAS_URL = 'http://tv.lrytas.lt'
-LRYTAS_API_URL = 'http://tv2.lrytas.lt/api/?'
 LRYTAS_API2_URL = 'http://kolumbus-api.lrytas.lt/query/?count=20&type=Video&'
 LRYTAS_LATEST_VIDEOS = LRYTAS_API2_URL +'order=props.pubfromdate_local-&ret_fields=props.categories[0].name__AS__category,props.href__AS__href,props.title__AS__title,props.media[1].otheralternate.ssurl.href__AS__ssurl,props.contributors[0].name__AS__contributors,props.kpm3id__AS__kpm3id,props.summary__AS__summary,props.media[indexof(x.type=%27media%27%20for%20x%20in%20props.media)].otheralternate.1280x720.href__AS__thumb,props.pubfromdate__AS__date&page='
 LRYTAS_POPULAR_VIDEOS = LRYTAS_API2_URL + 'order=read_count-&ret_fields=props.categories[0].name__AS__category,props.href__AS__href,props.title__AS__title,props.media[1].otheralternate.ssurl.href__AS__ssurl,props.contributors[0].name__AS__contributors,props.kpm3id__AS__kpm3id,props.summary__AS__summary,props.media[indexof(x.type=%27media%27%20for%20x%20in%20props.media)].otheralternate.1280x720.href__AS__thumb,props.pubfromdate__AS__date&page='
 LRYTAS_NEWS_VIDEOS = LRYTAS_API2_URL + 'order=props.pubfromdate_local-&ret_fields=props.categories[0].name__AS__category,props.href__AS__href,props.title__AS__title,props.media[1].otheralternate.ssurl.href__AS__ssurl,props.contributors[0].name__AS__contributors,props.kpm3id__AS__kpm3id,props.summary__AS__summary,props.media[indexof(x.type=%27media%27%20for%20x%20in%20props.media)].otheralternate.1280x720.href__AS__thumb,props.pubfromdate__AS__date&categoryterm=%2Flrytas%2Fvideo%2Fzinios*&page='
-LRYTAS_VIDEOTEKA_VIDEOS = LRYTAS_API_URL + 'what=new&page=%d&sid=3&tema=%s&kiek=45'
-LRYTAS_SEARCH = LRYTAS_API_URL + 'q=%s&what=search&page=%d&kiek=45'
-LRYTAS_VIDEOTEKA = LRYTAS_URL + '/archyvas/'
+LRYTAS_VIDEOTEKA = 'http://kolumbus-api.lrytas.lt//sections.json'
 LRYTAS_LIVE = 'http://ssb.lrytas.lt/live/smil:lrytas.smil/playlist.m3u8'
-LRYTAS_EPG = LRYTAS_API_URL + 'what=tvprog'
+LRYTAS_EPG = 'http://tv2.lrytas.lt/api/?what=tvprog'
 LRYTAS_IMG = 'http://img.lrytas.lt/show_foto/?id=%s&s=6&f=5'
 
 from HTMLParser import HTMLParser
@@ -156,40 +152,6 @@ def loadData(url, m_url=None):
   xbmc.executebuiltin('Container.SetViewMode(503)')
   xbmcplugin.endOfDirectory(int(sys.argv[1]))
 
-def loadData2(url, m_url=None):
-  
-  html = getURL(url)
-  js = json.loads(html)
-  
-  if 's' not in js:
-    return
-  
-  for video in js['s']:
-    listitem = xbmcgui.ListItem(video['PAVADINIMAS'])
-    listitem.setProperty('IsPlayable', 'true')
-    listitem.setThumbnailImage(LRYTAS_IMG % video['FOTO_ID'])
-    
-    info = { 'title': video['PAVADINIMAS'], 'plot': video['TEKSTAS'], 'aired' : video['DAT'], 'genre' : video['SKILTIS_PAV']}
-    
-    listitem.setInfo(type = 'video', infoLabels = info )
-    
-    xbmcplugin.addDirectoryItem(handle = int(sys.argv[1]), url = video['VIDEO_FILE_URL'], listitem = listitem, isFolder = False, totalItems = 0)
-    
-  if len(js['s']) > 30:
-    listitem = xbmcgui.ListItem("[Daugiau... ] %d" % page)
-    listitem.setProperty('IsPlayable', 'false')
-      
-    u = {}
-    u['mode'] = mode
-    u['page'] = page + 1
-    if m_url:
-      u['url'] = m_url
-    xbmcplugin.addDirectoryItem(handle = int(sys.argv[1]), url = sys.argv[0] + '?' + urllib.urlencode(u), listitem = listitem, isFolder = True, totalItems = 0)
-  
-  xbmcplugin.setContent(int( sys.argv[1] ), 'tvshows')
-  xbmc.executebuiltin('Container.SetViewMode(503)')
-  xbmcplugin.endOfDirectory(int(sys.argv[1]))
-
 def liveError():
   dialog = xbmcgui.Dialog()
   ok = dialog.ok( "Lietuvo ryto TV" , 'Nepavyko paleisti vaizdo įrašo!' ) 
@@ -225,18 +187,21 @@ def tv_shows():
   
   html = getURL(LRYTAS_VIDEOTEKA)
   
-  section = re.findall('<section class=\'archive\'>(.*?)</section>', html, re.DOTALL)
-  if not section:
+  js = json.loads(html)
+  
+  if 'categories' not in js:
     return
   
-  tv_items = re.findall('<a href=\'([^\']*)\'>([^<]*)</a>', section[0], re.DOTALL)
-  
-  for tv in tv_items:
+  for tv in js['categories']:
+    
+    if tv['parentTerm'] != '/lrytas/video/laidos':
+      continue
+    
     u = {}
     u['mode'] = 6
-    u['url'] = tv[0]
+    u['url'] = tv['term']
     u['page'] = 1
-    listitem = xbmcgui.ListItem(tv[1].strip())
+    listitem = xbmcgui.ListItem(tv['label'])
     listitem.setProperty('IsPlayable', 'false')
     xbmcplugin.addDirectoryItem(handle = int(sys.argv[1]), url = sys.argv[0] + '?' + urllib.urlencode(u), listitem = listitem, isFolder = True, totalItems = 0)
     
@@ -246,21 +211,7 @@ def tv_shows():
 
 def loadShow(url, page):
   
-  data_tema = settings.getSetting(url)
-
-  if not data_tema:
-
-    html = getURL(LRYTAS_URL + url)
-    
-    data_tema = re.findall('<a[^<>]*data-tema=\'(\d*)\'', html, re.DOTALL)
-    
-    if not data_tema:
-      return
-    
-    data_tema = data_tema[0]
-    settings.setSetting(url, data_tema)
-    
-  loadData(LRYTAS_VIDEOTEKA_VIDEOS % (page, data_tema), url)
+  loadData(LRYTAS_LATEST_VIDEOS + str(page) + '&categoryterm=' + urllib.quote_plus(url) + '*')
 
 def search(url=None, page=1):
   key = url
@@ -272,7 +223,7 @@ def search(url=None, page=1):
   if not key:
     return
   
-  loadData(LRYTAS_SEARCH % (urllib.quote_plus(key), page), key)
+  loadData(LRYTAS_LATEST_VIDEOS + str(page) + '&q=' + urllib.quote_plus(key), key)
 
 
 # **************** main ****************
